@@ -7,15 +7,8 @@ from collections import defaultdict
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    DefaultDict,
-    Dict,
-    List,
     Literal,
     NoReturn,
-    Optional,
-    Set,
-    Tuple,
     TypedDict,
     TypeVar,
     Union,
@@ -33,6 +26,8 @@ from scrapy.utils.log import failure_to_exc_info
 from scrapy.utils.misc import arg_to_iter
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     # typing.Self requires Python 3.11
     from typing_extensions import Self
 
@@ -48,11 +43,11 @@ _T = TypeVar("_T")
 class FileInfo(TypedDict):
     url: str
     path: str
-    checksum: Optional[str]
+    checksum: str | None
     status: str
 
 
-FileInfoOrError = Union[Tuple[Literal[True], FileInfo], Tuple[Literal[False], Failure]]
+FileInfoOrError = Union[tuple[Literal[True], FileInfo], tuple[Literal[False], Failure]]
 
 
 logger = logging.getLogger(__name__)
@@ -67,16 +62,16 @@ class MediaPipeline(ABC):
     class SpiderInfo:
         def __init__(self, spider: Spider):
             self.spider: Spider = spider
-            self.downloading: Set[bytes] = set()
-            self.downloaded: Dict[bytes, Union[FileInfo, Failure]] = {}
-            self.waiting: DefaultDict[bytes, List[Deferred[FileInfo]]] = defaultdict(
+            self.downloading: set[bytes] = set()
+            self.downloaded: dict[bytes, FileInfo | Failure] = {}
+            self.waiting: defaultdict[bytes, list[Deferred[FileInfo]]] = defaultdict(
                 list
             )
 
     def __init__(
         self,
-        download_func: Optional[Callable[[Request, Spider], Response]] = None,
-        settings: Union[Settings, Dict[str, Any], None] = None,
+        download_func: Callable[[Request, Spider], Response] | None = None,
+        settings: Settings | dict[str, Any] | None = None,
     ):
         self.download_func = download_func
 
@@ -98,8 +93,8 @@ class MediaPipeline(ABC):
     def _key_for_pipe(
         self,
         key: str,
-        base_class_name: Optional[str] = None,
-        settings: Optional[Settings] = None,
+        base_class_name: str | None = None,
+        settings: Settings | None = None,
     ) -> str:
         class_name = self.__class__.__name__
         formatted_key = f"{class_name.upper()}_{key}"
@@ -129,12 +124,12 @@ class MediaPipeline(ABC):
 
     def process_item(
         self, item: Any, spider: Spider
-    ) -> Deferred[List[FileInfoOrError]]:
+    ) -> Deferred[list[FileInfoOrError]]:
         info = self.spiderinfo
         requests = arg_to_iter(self.get_media_requests(item, info))
         dlist = [self._process_request(r, info, item) for r in requests]
         dfd = cast(
-            "Deferred[List[FileInfoOrError]]", DeferredList(dlist, consumeErrors=True)
+            "Deferred[list[FileInfoOrError]]", DeferredList(dlist, consumeErrors=True)
         )
         return dfd.addCallback(self.item_completed, item, info)
 
@@ -165,7 +160,7 @@ class MediaPipeline(ABC):
 
         # Download request checking media_to_download hook output first
         info.downloading.add(fp)
-        dfd: Deferred[Optional[FileInfo]] = mustbe_deferred(
+        dfd: Deferred[FileInfo | None] = mustbe_deferred(
             self.media_to_download, request, info, item=item
         )
         dfd2: Deferred[FileInfo] = dfd.addCallback(
@@ -186,8 +181,8 @@ class MediaPipeline(ABC):
             request.meta["handle_httpstatus_all"] = True
 
     def _check_media_to_download(
-        self, result: Optional[FileInfo], request: Request, info: SpiderInfo, item: Any
-    ) -> Union[FileInfo, Deferred[FileInfo]]:
+        self, result: FileInfo | None, request: Request, info: SpiderInfo, item: Any
+    ) -> FileInfo | Deferred[FileInfo]:
         if result is not None:
             return result
         dfd: Deferred[Response]
@@ -205,7 +200,7 @@ class MediaPipeline(ABC):
         return dfd2
 
     def _cache_result_and_execute_waiters(
-        self, result: Union[FileInfo, Failure], fp: bytes, info: SpiderInfo
+        self, result: FileInfo | Failure, fp: bytes, info: SpiderInfo
     ) -> None:
         if isinstance(result, Failure):
             # minimize cached information for failure
@@ -247,12 +242,12 @@ class MediaPipeline(ABC):
     @abstractmethod
     def media_to_download(
         self, request: Request, info: SpiderInfo, *, item: Any = None
-    ) -> Deferred[Optional[FileInfo]]:
+    ) -> Deferred[FileInfo | None]:
         """Check request before starting download"""
         raise NotImplementedError()
 
     @abstractmethod
-    def get_media_requests(self, item: Any, info: SpiderInfo) -> List[Request]:
+    def get_media_requests(self, item: Any, info: SpiderInfo) -> list[Request]:
         """Returns the media requests to download"""
         raise NotImplementedError()
 
@@ -276,7 +271,7 @@ class MediaPipeline(ABC):
         raise NotImplementedError()
 
     def item_completed(
-        self, results: List[FileInfoOrError], item: Any, info: SpiderInfo
+        self, results: list[FileInfoOrError], item: Any, info: SpiderInfo
     ) -> Any:
         """Called per item when all media requests has been processed"""
         if self.LOG_FAILED_RESULTS:
@@ -295,8 +290,8 @@ class MediaPipeline(ABC):
     def file_path(
         self,
         request: Request,
-        response: Optional[Response] = None,
-        info: Optional[SpiderInfo] = None,
+        response: Response | None = None,
+        info: SpiderInfo | None = None,
         *,
         item: Any = None,
     ) -> str:

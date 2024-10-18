@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import json
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable
 
 from itemadapter import ItemAdapter, is_item
 
@@ -16,7 +18,7 @@ class UrlContract(Contract):
 
     name = "url"
 
-    def adjust_request_args(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    def adjust_request_args(self, args: dict[str, Any]) -> dict[str, Any]:
         args["url"] = self.args[0]
         return args
 
@@ -30,7 +32,7 @@ class CallbackKeywordArgumentsContract(Contract):
 
     name = "cb_kwargs"
 
-    def adjust_request_args(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    def adjust_request_args(self, args: dict[str, Any]) -> dict[str, Any]:
         args["cb_kwargs"] = json.loads(" ".join(self.args))
         return args
 
@@ -44,7 +46,7 @@ class MetadataContract(Contract):
 
     name = "meta"
 
-    def adjust_request_args(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    def adjust_request_args(self, args: dict[str, Any]) -> dict[str, Any]:
         args["meta"] = json.loads(" ".join(self.args))
         return args
 
@@ -63,7 +65,7 @@ class ReturnsContract(Contract):
     """
 
     name = "returns"
-    object_type_verifiers: Dict[Optional[str], Callable[[Any], bool]] = {
+    object_type_verifiers: dict[str | None, Callable[[Any], bool]] = {
         "request": lambda x: isinstance(x, Request),
         "requests": lambda x: isinstance(x, Request),
         "item": is_item,
@@ -90,7 +92,7 @@ class ReturnsContract(Contract):
         except IndexError:
             self.max_bound = float("inf")
 
-    def post_process(self, output: List[Any]) -> None:
+    def post_process(self, output: list[Any]) -> None:
         occurrences = 0
         for x in output:
             if self.obj_type_verifier(x):
@@ -116,7 +118,7 @@ class ScrapesContract(Contract):
 
     name = "scrapes"
 
-    def post_process(self, output: List[Any]) -> None:
+    def post_process(self, output: list[Any]) -> None:
         for x in output:
             if is_item(x):
                 missing = [arg for arg in self.args if arg not in ItemAdapter(x)]
